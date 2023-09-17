@@ -1,7 +1,6 @@
 # GitLab Migrator
 
-GitLab Migrator is a Java application which can be used to migrate GitLab groups into an GitHub organisation.
-
+GitLab Migrator is a java application which can be used to migrate GitLab groups into an GitHub organisation and keep locally checkout out groups in sync with upstream.
 ### TODO badges
 
 ## Installation
