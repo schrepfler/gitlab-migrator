@@ -4,10 +4,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import net.sigmalab.gitlabmigrator.gitlab.GitlabClient;
 import net.sigmalab.gitlabmigrator.ssh.Ssh;
-import net.sigmalab.gitlabmigrator.utils.JsonMapper;
-import net.sigmalab.gitlabmigrator.utils.MappingDescriptor;
-import net.sigmalab.gitlabmigrator.utils.MirrorStatus;
-import net.sigmalab.gitlabmigrator.utils.RepoMapping;
+import net.sigmalab.gitlabmigrator.utils.*;
 import org.apache.sshd.client.ClientBuilder;
 import org.apache.sshd.git.transport.GitSshdSessionFactory;
 import org.eclipse.jgit.api.Git;
@@ -38,9 +35,9 @@ import static net.sigmalab.gitlabmigrator.utils.MirrorStatus.*;
 
 @Command(name = "mirror-repos", description = "Mirrors GitLab group repositories into a Github organisation.")
 @Slf4j
-public class MirrorRepos implements Callable<Integer> {
+public class MirrorReposCommand implements Callable<Integer> {
 
-    GitHub github;
+    private GitHub github;
 
     @Option(names = {"--target-directory"},
             description = "The target directory to which to clone the repositories.",
@@ -60,9 +57,9 @@ public class MirrorRepos implements Callable<Integer> {
 
     @Option(names = "--group-id-or-path",
             description = "The GitLab group id or path to group",
-            required = true,
-            converter = GroupIdOrPathConverter.class)
-    private Object groupIdOrPath;
+            required = true
+    )
+    private String groupIdOrPath;
 
     @Option(names = "--mapping-file",
             description = "File mapping repository names between origin and target repositories.\n" +
@@ -82,6 +79,12 @@ public class MirrorRepos implements Callable<Integer> {
                     "Specify if you want to delete ALL projects in organisation prior to uploading them in order to avoid conflicts.\n" +
                     "Note. Your Personal Access Token needs to have `delete_repo` permission set.")
     private boolean deleteTargetProjects;
+
+    private GitlabClient gitlabClient;
+
+    public MirrorReposCommand() {
+
+    }
 
     @Override
     public Integer call() throws Exception {
@@ -111,12 +114,12 @@ public class MirrorRepos implements Callable<Integer> {
         try (GitLabApi gitLabApi = new GitLabApi("https://gitlab.com", gitlabPersonalAccessToken)) {
             gitLabApi.enableRequestResponseLogging();
 
-            var groupWorkset = GitlabClient.getSubgroups(gitLabApi, groupIdOrPath);
+            var groupWorkset = gitlabClient.getSubgroups(groupIdOrPath);
             Group parentGroup = gitLabApi.getGroupApi().getGroup(groupIdOrPath);
             groupWorkset.add(parentGroup);
 
             var projectsWorkset = groupWorkset.stream()
-                    .map(group -> GitlabClient.getProjectsForGroup(gitLabApi, group))
+                    .map(group -> gitlabClient.getProjectsForGroup(group))
                     .flatMap(List::stream)
                     .toList();
 
@@ -125,7 +128,7 @@ public class MirrorRepos implements Callable<Integer> {
                 if (!mappingFile.exists()) {
 
                     Map<Long, RepoMapping> repoMappings = projectsWorkset.stream()
-                            .map(proj -> new RepoMapping(proj.getId(), proj.getPathWithNamespace(), proj.getPathWithNamespace(), TODO))
+                            .map(proj -> new RepoMapping(proj.getId(), proj.getPathWithNamespace(), proj.getPathWithNamespace(), TODO, true ))
                             .collect(Collectors.toMap(RepoMapping::id, Function.identity()));
 
                     var mappingDescriptor = new MappingDescriptor(repoMappings);
@@ -161,7 +164,7 @@ public class MirrorRepos implements Callable<Integer> {
                         if (TODO == repoMapping.mirrorStatus() || RATE_LIMIT_HIT_DELAYED == repoMapping.mirrorStatus()) {
 
                             try {
-                                var path = GitlabClient.cloneGitlabProject(targetDir.getAbsolutePath(), proj, proj.getNamespace().getName(), transportConfigCallback);
+                                var path = gitlabClient.cloneGitlabProject(targetDir.getAbsolutePath(), proj, proj.getNamespace().getName(), transportConfigCallback, true);
 
                                 var newRepo = github.getOrganization(githubOrganization)
                                         .createRepository(repoMapping.title())
@@ -170,7 +173,7 @@ public class MirrorRepos implements Callable<Integer> {
 
                                 System.out.println("CREATED " + newRepo.getUrl());
                                 openRepositoryAddRemoteAndPush(newRepo.getSshUrl(), path, transportConfigCallback);
-                                var updatedRepoMapping = new RepoMapping(repoMapping.id(), repoMapping.origin(), repoMapping.title(), PUSHED);
+                                var updatedRepoMapping = new RepoMapping(repoMapping.id(), repoMapping.origin(), repoMapping.title(), PUSHED, repoMapping.skip());
                                 mappingDescriptor.repoMappings().put(updatedRepoMapping.id(), updatedRepoMapping);
                                 Thread.sleep(1000);
 
@@ -183,7 +186,7 @@ public class MirrorRepos implements Callable<Integer> {
                                 } else {
                                     reason = ERROR;
                                 }
-                                var updatedRepoMapping = new RepoMapping(repoMapping.id(), repoMapping.origin(), repoMapping.title(), reason);
+                                var updatedRepoMapping = new RepoMapping(repoMapping.id(), repoMapping.origin(), repoMapping.title(), reason, repoMapping.skip());
                                 mappingDescriptor.repoMappings().put(updatedRepoMapping.id(), updatedRepoMapping);
                             } finally {
                                 saveMappingDescriptor(mappingDescriptor);
@@ -239,7 +242,7 @@ public class MirrorRepos implements Callable<Integer> {
 
     }
 
-    private boolean mappingDescriptorCoversAllProjects(List<Project> projectsWorkset, MappingDescriptor mappingDescriptor) {
+    private boolean mappingDescriptorCoversAllProjects(List<Project> projectsWorkSet, MappingDescriptor mappingDescriptor) {
         var mappedRepos = mappingDescriptor
                 .repoMappings()
                 .values()
@@ -247,7 +250,7 @@ public class MirrorRepos implements Callable<Integer> {
                 .map(RepoMapping::id)
                 .toList();
 
-        for (Project project : projectsWorkset) {
+        for (Project project : projectsWorkSet) {
             if (!mappedRepos.contains(project.getId())) {
                 log.error("Project not mapped {}", project.getHttpUrlToRepo());
                 return false;

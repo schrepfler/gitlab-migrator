@@ -1,6 +1,7 @@
 # GitLab Migrator
 
-GitLab Migrator is a Java application which can be used to migrate GitLab groups into an GitHub organisation.
+GitLab Migrator is a Java application which can be used primarily to map and migrate GitLab groups into a GitHub organisation.
+You can also use it to keep GitLab repositories synced up locally and eventuall it'll be able to keep your GitLab and GitHub in sync.
 
 ### TODO badges
 
@@ -14,18 +15,45 @@ TODO Needs implementing CI/CD for binaries and publish.
 
 ## Usage
 
-The command can be executed with the following application arguments
+Gitlab Migrator consists of the following commands
+
+### Init
+
+This command will fetch the GitLab group, subgroups and repository information locally, will scan the GitHub organisation and then save this information.
+
+```shell
+gitlab-migrator init  --group-id-or-path=<groupIdOrPath>
+                      --gitlab-access-token=<gitlabAccessToken>
+                      --github-organization=<githubOrganization>
+                      --github-personal-access-token=<githubAppInstalationToken>
+                      [--migrator-db-file=<migratorDbFile>]
+```
+
+### Export
+
+This command will clone the gitlab repositories locally.
+
+```shell
+gitlab-migrator export  --target-directory=<targetDirectory>
+                        --group-id-or-path=<groupIdOrPath>
+                        --gitlab-access-token=<gitlabAccessToken>
+                        --expanded=<expanded|false>
+                        --enable-gitlab-logging=<enableGitLabLogging|false>
+```
+
+### WIP Map Organisation
+
+### WIP Migrate
 
 ```shell
  
-gitlab-migrator     --github-organization=<githubOrganization>
-                    --github-personal-access-token=<githubAppInstalationToken>
-                    --gitlab-personal-access-token=<gitlabPersonalAccessToken>
-                    --group-id-or-path=<groupIdOrPath>
-                    [--mapping-file=<mappingFile>]
-                    [--target-directory=<targetDir>]
-                    [--delete-organization-projects]
-                   
+gitlab-migrator migrate --github-organization=<githubOrganization>
+                        --github-personal-access-token=<githubAppInstalationToken>
+                        --gitlab-personal-access-token=<gitlabPersonalAccessToken>
+                        --group-id-or-path=<groupIdOrPath>
+                        [--mapping-file=<mappingFile>]
+                        [--target-directory=<targetDir>]
+                        [--delete-organization-projects]
 ```
 
 When executing the tool you'll go through two phases. 

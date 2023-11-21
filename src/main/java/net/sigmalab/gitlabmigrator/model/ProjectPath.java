@@ -1,4 +1,4 @@
-package net.sigmalab.gitlabmigrator.cli;
+package net.sigmalab.gitlabmigrator.model;
 
 import org.gitlab4j.api.models.Project;
 
